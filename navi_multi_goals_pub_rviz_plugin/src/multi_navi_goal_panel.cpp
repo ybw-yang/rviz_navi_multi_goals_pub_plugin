@@ -1,7 +1,5 @@
 #include <cstdio>
 
-#include <ros/console.h>
-
 #include <fstream>
 #include <sstream>
 
@@ -13,28 +11,23 @@
 #include <QDebug>
 #include <QtWidgets/QTableWidget>
 #include <QtWidgets/qheaderview.h>
+#include "tf2_geometry_msgs/tf2_geometry_msgs.h"
+#include "tf2/impl/utils.h"
+#include "rviz_common/display_context.hpp"
 
-
-#include "multi_navi_goal_panel.h"
+#include "multi_navi_goal_panel.hpp"
 
 namespace navi_multi_goals_pub_rviz_plugin {
 
 
     MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
-            : rviz::Panel(parent), nh_(), maxNumGoal_(1) {
-
-        goal_sub_ = nh_.subscribe<geometry_msgs::PoseStamped>("move_base_simple/goal_temp", 1,
-                                                              boost::bind(&MultiNaviGoalsPanel::goalCntCB, this, _1));
-
-        status_sub_ = nh_.subscribe<actionlib_msgs::GoalStatusArray>("move_base/status", 1,
-                                                                     boost::bind(&MultiNaviGoalsPanel::statusCB, this,
-                                                                                 _1));
-
-        goal_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("move_base_simple/goal", 1);
-
-        cancel_pub_ = nh_.advertise<actionlib_msgs::GoalID>("move_base/cancel", 1);
-
-        marker_pub_ = nh_.advertise<visualization_msgs::Marker>("visualization_marker", 1);
+            : rviz_common::Panel(parent), maxNumGoal_(1) 
+    {
+        // nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
+        nh_ = std::make_shared<rclcpp::Node>("navi_multi_goals");
+        goal_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_pose", 1);
+        cancel_pub_ = nh_->create_publisher<actionlib_msgs::msg::GoalID>("/waypoint_model/cancel", 1);
+        marker_pub_ = nh_->create_publisher<visualization_msgs::msg::Marker>("/waypoint_model/visualization_marker", 1);
 
         QVBoxLayout *root_layout = new QVBoxLayout;
         // create a panel about "maxNumGoal"
@@ -78,7 +71,16 @@ namespace navi_multi_goals_pub_rviz_plugin {
         connect(cycle_checkbox_, SIGNAL(clicked(bool)), this, SLOT(checkCycle()));
         connect(output_timer, SIGNAL(timeout()), this, SLOT(startSpin()));
 
+        goal_sub_ = nh_->create_subscription<geometry_msgs::msg::PoseStamped>("/waypoint_model/goal_temp", 1,
+                                                              std::bind(&MultiNaviGoalsPanel::goalCntCB, this, std::placeholders::_1));
 
+        status_sub_ = nh_->create_subscription<actionlib_msgs::msg::GoalStatusArray>("/waypoint_model/status", 1,
+                                                                     std::bind(&MultiNaviGoalsPanel::statusCB, this,
+                                                                                 std::placeholders::_1));
+    }
+
+    void MultiNaviGoalsPanel::onInitialize()
+    {
     }
 
 // 更新maxNumGoal命名
@@ -94,11 +96,11 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
             // 如果命名为空，不发布任何信息
             if (output_maxNumGoal_ == "") {
-                nh_.setParam("maxNumGoal_", 1);
+                // nh_.setParam("maxNumGoal_", 1);
                 maxNumGoal_ = 1;
             } else {
-//                velocity_publisher_ = nh_.advertise<geometry_msgs::Twist>(output_maxNumGoal_.toStdString(), 1);
-                nh_.setParam("maxNumGoal_", output_maxNumGoal_.toInt());
+//                velocity_publisher_ = nh_->create_publisher<geometry_msgs::Twist>(output_maxNumGoal_.toStdString(), 1);
+                // nh_.setParam("maxNumGoal_", output_maxNumGoal_.toInt());
                 maxNumGoal_ = output_maxNumGoal_.toInt();
             }
             Q_EMIT configChanged();
@@ -107,7 +109,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
     // initialize the table of pose
     void MultiNaviGoalsPanel::initPoseTable() {
-        ROS_INFO("Initialize");
+        RCLCPP_INFO(nh_->get_logger(), "Initialize");
         curGoalIdx_ = 0, cycleCnt_ = 0;
         permit_ = false, cycle_ = false;
         poseArray_table_->clear();
@@ -126,9 +128,9 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
     // delete marks in the map
     void MultiNaviGoalsPanel::deleteMark() {
-        visualization_msgs::Marker marker_delete;
-        marker_delete.action = visualization_msgs::Marker::DELETEALL;
-        marker_pub_.publish(marker_delete);
+        visualization_msgs::msg::Marker marker_delete;
+        marker_delete.action = visualization_msgs::msg::Marker::DELETEALL;
+        marker_pub_->publish(marker_delete);
     }
 
     //update the table of pose
@@ -142,41 +144,45 @@ namespace navi_multi_goals_pub_rviz_plugin {
     }
 
     // call back function for counting goals
-    void MultiNaviGoalsPanel::goalCntCB(const geometry_msgs::PoseStamped::ConstPtr &pose) {
-        if (pose_array_.poses.size() < maxNumGoal_) {
+    void MultiNaviGoalsPanel::goalCntCB(const geometry_msgs::msg::PoseStamped::SharedPtr pose) {
+        if (int(pose_array_.poses.size()) < maxNumGoal_) {
             pose_array_.poses.push_back(pose->pose);
             pose_array_.header.frame_id = pose->header.frame_id;
             writePose(pose->pose);
             markPose(pose);
         } else {
-            ROS_ERROR("Beyond the maximum number of goals: %d", maxNumGoal_);
+            RCLCPP_ERROR(nh_->get_logger(), "Beyond the maximum number of goals: %d", maxNumGoal_);
         }
     }
 
     // write the poses into the table
-    void MultiNaviGoalsPanel::writePose(geometry_msgs::Pose pose) {
+    void MultiNaviGoalsPanel::writePose(geometry_msgs::msg::Pose pose) {
 
         poseArray_table_->setItem(pose_array_.poses.size() - 1, 0,
                                   new QTableWidgetItem(QString::number(pose.position.x, 'f', 2)));
         poseArray_table_->setItem(pose_array_.poses.size() - 1, 1,
                                   new QTableWidgetItem(QString::number(pose.position.y, 'f', 2)));
+        
+        tf2::Quaternion tf_quaternion;
+        tf2::fromMsg(pose.orientation, tf_quaternion);
+        double yaw = tf2::impl::getYaw(tf_quaternion);
         poseArray_table_->setItem(pose_array_.poses.size() - 1, 2,
                                   new QTableWidgetItem(
-                                          QString::number(tf::getYaw(pose.orientation) * 180.0 / 3.14, 'f', 2)));
+                                          QString::number(yaw * 180.0 / 3.14, 'f', 2)));
 
     }
 
     // when setting a Navi Goal, it will set a mark on the map
-    void MultiNaviGoalsPanel::markPose(const geometry_msgs::PoseStamped::ConstPtr &pose) {
-        if (ros::ok()) {
-            visualization_msgs::Marker arrow;
-            visualization_msgs::Marker number;
+    void MultiNaviGoalsPanel::markPose(const geometry_msgs::msg::PoseStamped::SharedPtr &pose) {
+        if (rclcpp::ok()) {
+            visualization_msgs::msg::Marker arrow;
+            visualization_msgs::msg::Marker number;
             arrow.header.frame_id = number.header.frame_id = pose->header.frame_id;
             arrow.ns = "navi_point_arrow";
             number.ns = "navi_point_number";
-            arrow.action = number.action = visualization_msgs::Marker::ADD;
-            arrow.type = visualization_msgs::Marker::ARROW;
-            number.type = visualization_msgs::Marker::TEXT_VIEW_FACING;
+            arrow.action = number.action = visualization_msgs::msg::Marker::ADD;
+            arrow.type = visualization_msgs::msg::Marker::ARROW;
+            number.type = visualization_msgs::msg::Marker::TEXT_VIEW_FACING;
             arrow.pose = number.pose = pose->pose;
             number.pose.position.z += 1.0;
             arrow.scale.x = 1.0;
@@ -188,8 +194,8 @@ namespace navi_multi_goals_pub_rviz_plugin {
             arrow.color.a = number.color.a = 1.0;
             arrow.id = number.id = pose_array_.poses.size();
             number.text = std::to_string(pose_array_.poses.size());
-            marker_pub_.publish(arrow);
-            marker_pub_.publish(number);
+            marker_pub_->publish(arrow);
+            marker_pub_->publish(number);
         }
     }
 
@@ -202,36 +208,36 @@ namespace navi_multi_goals_pub_rviz_plugin {
     void MultiNaviGoalsPanel::startNavi() {
         curGoalIdx_ = curGoalIdx_ % pose_array_.poses.size();
         if (!pose_array_.poses.empty() && curGoalIdx_ < maxNumGoal_) {
-            geometry_msgs::PoseStamped goal;
+            geometry_msgs::msg::PoseStamped goal;
             goal.header = pose_array_.header;
             goal.pose = pose_array_.poses.at(curGoalIdx_);
-            goal_pub_.publish(goal);
-            ROS_INFO("Navi to the Goal%d", curGoalIdx_ + 1);
+            goal_pub_->publish(goal);
+            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
             poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
             curGoalIdx_ += 1;
             permit_ = true;
         } else {
-            ROS_ERROR("Something Wrong");
+            RCLCPP_ERROR(nh_->get_logger(), "Something Wrong");
         }
     }
 
     // complete the remaining goals
     void MultiNaviGoalsPanel::completeNavi() {
-        if (curGoalIdx_ < pose_array_.poses.size()) {
-            geometry_msgs::PoseStamped goal;
+        if (curGoalIdx_ < int(pose_array_.poses.size())) {
+            geometry_msgs::msg::PoseStamped goal;
             goal.header = pose_array_.header;
             goal.pose = pose_array_.poses.at(curGoalIdx_);
-            goal_pub_.publish(goal);
-            ROS_INFO("Navi to the Goal%d", curGoalIdx_ + 1);
+            goal_pub_->publish(goal);
+            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
             poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
             curGoalIdx_ += 1;
             permit_ = true;
         } else {
-            ROS_ERROR("All goals are completed");
+            RCLCPP_ERROR(nh_->get_logger(), "All goals are completed");
             permit_ = false;
         }
     }
@@ -239,12 +245,11 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // command the goals cyclically
     void MultiNaviGoalsPanel::cycleNavi() {
         if (permit_) {
-            geometry_msgs::PoseStamped goal;
+            geometry_msgs::msg::PoseStamped goal;
             goal.header = pose_array_.header;
             goal.pose = pose_array_.poses.at(curGoalIdx_ % pose_array_.poses.size());
-            goal_pub_.publish(goal);
-            ROS_INFO("Navi to the Goal%lu, in the %dth cycle", curGoalIdx_ % pose_array_.poses.size() + 1,
-                     cycleCnt_ + 1);
+            goal_pub_->publish(goal);
+            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d, in the %dth cycle", curGoalIdx_ % pose_array_.poses.size() + 1, cycleCnt_ + 1);
             bool even = ((cycleCnt_ + 1) % 2 != 0);
             QColor color_table;
             if (even) color_table = QColor(255, 69, 0); else color_table = QColor(100, 149, 237);
@@ -259,32 +264,32 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // cancel the current command
     void MultiNaviGoalsPanel::cancelNavi() {
         if (!cur_goalid_.id.empty()) {
-            cancel_pub_.publish(cur_goalid_);
-            ROS_ERROR("Navigation have been canceled");
+            cancel_pub_->publish(cur_goalid_);
+            RCLCPP_ERROR(nh_->get_logger(), "Navigation have been canceled");
         }
     }
 
     // call back for listening current state
-    void MultiNaviGoalsPanel::statusCB(const actionlib_msgs::GoalStatusArray::ConstPtr &statuses) {
+    void MultiNaviGoalsPanel::statusCB(const actionlib_msgs::msg::GoalStatusArray::SharedPtr statuses) {
         bool arrived_pre = arrived_;
         arrived_ = checkGoal(statuses->status_list);
-        if (arrived_) { ROS_ERROR("%d,%d", int(arrived_), int(arrived_pre)); }
-        if (arrived_ && arrived_ != arrived_pre && ros::ok() && permit_) {
+        if (arrived_) { RCLCPP_ERROR(nh_->get_logger(), "%d, %d", int(arrived_), int(arrived_pre)); }
+        if (arrived_ && arrived_ != arrived_pre && rclcpp::ok() && permit_) {
             if (cycle_) cycleNavi();
             else completeNavi();
         }
     }
 
     //check the current state of goal
-    bool MultiNaviGoalsPanel::checkGoal(std::vector<actionlib_msgs::GoalStatus> status_list) {
+    bool MultiNaviGoalsPanel::checkGoal(std::vector<actionlib_msgs::msg::GoalStatus> status_list) {
         bool done;
         if (!status_list.empty()) {
             for (auto &i : status_list) {
                 if (i.status == 3) {
                     done = true;
-                    ROS_INFO("completed Goal%d", curGoalIdx_);
+                    RCLCPP_INFO(nh_->get_logger(), "completed Goal %d", curGoalIdx_);
                 } else if (i.status == 4) {
-                    ROS_ERROR("Goal%d is Invalid, Navi to Next Goal%d", curGoalIdx_, curGoalIdx_ + 1);
+                    RCLCPP_ERROR(nh_->get_logger(), "Goal %d is Invalid, Navi to Next Goal %d",curGoalIdx_, curGoalIdx_ + 1);
                     return true;
                 } else if (i.status == 0) {
                     done = true;
@@ -294,7 +299,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
                 } else done = false;
             }
         } else {
-            ROS_INFO("Please input the Navi Goal");
+            RCLCPP_INFO(nh_->get_logger(), "Please input the Navi Goal");
             done = false;
         }
         return done;
@@ -302,8 +307,8 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
 // spin for subscribing
     void MultiNaviGoalsPanel::startSpin() {
-        if (ros::ok()) {
-            ros::spinOnce();
+        if (rclcpp::ok()) {
+            rclcpp::spin_some(nh_);
         }
     }
 
@@ -311,7 +316,6 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
 // 声明此类是一个rviz的插件
 
-#include <pluginlib/class_list_macros.h>
-
-PLUGINLIB_EXPORT_CLASS(navi_multi_goals_pub_rviz_plugin::MultiNaviGoalsPanel, rviz::Panel)
+#include <pluginlib/class_list_macros.hpp>
+PLUGINLIB_EXPORT_CLASS(navi_multi_goals_pub_rviz_plugin::MultiNaviGoalsPanel, rviz_common::Panel)
 

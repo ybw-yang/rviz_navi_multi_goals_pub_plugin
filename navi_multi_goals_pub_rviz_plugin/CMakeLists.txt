@@ -1,52 +1,53 @@
-## BEGIN_TUTORIAL
-## This CMakeLists.txt file for rviz_plugin_tutorials builds both the MultiNaviGoalsPanel tutorial and the ImuDisplay tutorial.
-##
-## First start with some standard catkin stuff.
-cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.5)
 project(navi_multi_goals_pub_rviz_plugin)
-find_package(catkin REQUIRED COMPONENTS rviz geometry_msgs std_msgs actionlib_msgs)
-catkin_package(CATKIN_DEPENDS message_runtime)
-include_directories(${catkin_INCLUDE_DIRS})
-link_directories(${catkin_LIBRARY_DIRS})
 
-## This setting causes Qt's "MOC" generation to happen automatically.
+# Default to C++14
+if(NOT CMAKE_CXX_STANDARD)
+  set(CMAKE_CXX_STANDARD 17)
+endif()
+
+if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+endif()
+
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 
-## This plugin includes Qt widgets, so we must include Qt.
-## We'll use the version that rviz used so they are compatible.
-if(rviz_QT_VERSION VERSION_LESS "5")
-  message(STATUS "Using Qt4 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
-  find_package(Qt4 ${rviz_QT_VERSION} EXACT REQUIRED QtCore QtGui)
-  ## pull in all required include dirs, define QT_LIBRARIES, etc.
-  include(${QT_USE_FILE})
-else()
-  message(STATUS "Using Qt5 based on the rviz_QT_VERSION: ${rviz_QT_VERSION}")
-  find_package(Qt5 ${rviz_QT_VERSION} EXACT REQUIRED Core Widgets)
-  ## make target_link_libraries(${QT_LIBRARIES}) pull in all required dependencies
-  set(QT_LIBRARIES Qt5::Widgets)
-endif()
-## I prefer the Qt signals and slots to avoid defining "emit", "slots",
-## etc because they can conflict with boost signals, so define QT_NO_KEYWORDS here.
-add_definitions(-DQT_NO_KEYWORDS)
+find_package(ament_cmake REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(rviz_common REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(actionlib_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Test Concurrent)
 
-## Here we specify which header files need to be run through "moc",
-## Qt's meta-object compiler.
-
+## This setting causes Qt's "MOC" generation to happen automatically.
 
 ## Here we specify the list of source files, including the output of
 ## the previous command which is stored in ``${MOC_FILES}``.
 set(SOURCE_FILES
   src/multi_navi_goal_panel.cpp
+  include/multi_navi_goal_panel.hpp
   ${MOC_FILES}
 )
 
+include_directories(
+  include
+)
 ## An rviz plugin is just a shared library, so here we declare the
 ## library to be called ``${PROJECT_NAME}`` (which is
 ## "rviz_plugin_tutorials", or whatever your version of this project
 ## is called) and specify the list of source files we collected above
 ## in ``${SOURCE_FILES}``.
-add_library(${PROJECT_NAME} ${SOURCE_FILES})
-
+add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
+ament_target_dependencies(${PROJECT_NAME}
+  rclcpp tf2 rviz_common actionlib_msgs
+  std_msgs  visualization_msgs
+  pluginlib Qt5
+)
 ## Link the library with whatever Qt libraries have been defined by
 ## the ``find_package(Qt4 ...)`` line above, and with whatever libraries
 ## catkin has included.
@@ -56,34 +57,38 @@ add_library(${PROJECT_NAME} ${SOURCE_FILES})
 ## library and names the actual file something like
 ## "librviz_plugin_tutorials.so", or whatever is appropriate for your
 ## particular OS.
-target_link_libraries(${PROJECT_NAME} ${QT_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${QT_LIBRARIES} rviz_common::rviz_common)
 ## END_TUTORIAL
+
+target_compile_definitions(${PROJECT_NAME} PRIVATE "RVIZ_DEFAULT_PLUGINS_BUILDING_LIBRARY")
+
+# prevent pluginlib from using boost
+target_compile_definitions(${PROJECT_NAME} PUBLIC "PLUGINLIB__DISABLE_BOOST_FUNCTIONS")
+
+pluginlib_export_plugin_description_file(rviz_common plugin_description.xml)
 
 
 ## Install rules
-
-install(TARGETS
-  ${PROJECT_NAME}
-  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
-  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+install(
+  TARGETS ${PROJECT_NAME}
+  EXPORT ${PROJECT_NAME}
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+  INCLUDES DESTINATION include
+)
+install(
+  DIRECTORY include/
+  DESTINATION include/
 )
 
-install(FILES 
-  plugin_description.xml
-  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
-install(DIRECTORY icons/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/icons)
+ament_export_include_directories(include)
+ament_export_targets(${library_name} HAS_LIBRARY_TARGET)
+ament_export_dependencies(
+  Qt5
+  rviz_common
+  geometry_msgs
+  rclcpp
+)
 
-install(DIRECTORY media/
-        DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/media)
-
-#install(DIRECTORY media/
-#  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/media)
-
-#install(DIRECTORY icons/
-#  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/icons)
-
-#install(PROGRAMS scripts/send_test_msgs.py
-#  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
-
+ament_package()
