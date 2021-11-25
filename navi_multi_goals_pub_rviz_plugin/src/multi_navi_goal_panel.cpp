@@ -26,8 +26,10 @@ namespace navi_multi_goals_pub_rviz_plugin {
         // nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
         nh_ = std::make_shared<rclcpp::Node>("navi_multi_goals");
         goal_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_pose", 1);
-        cancel_pub_ = nh_->create_publisher<actionlib_msgs::msg::GoalID>("/waypoint_model/cancel", 1);
         marker_pub_ = nh_->create_publisher<visualization_msgs::msg::Marker>("/waypoint_model/visualization_marker", 1);
+
+        cancel_client_ = nh_->create_client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>("/tracking_action/_action/cancel_goal");
+
 
         QVBoxLayout *root_layout = new QVBoxLayout;
         // create a panel about "maxNumGoal"
@@ -74,7 +76,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
         goal_sub_ = nh_->create_subscription<geometry_msgs::msg::PoseStamped>("/waypoint_model/goal_temp", 1,
                                                               std::bind(&MultiNaviGoalsPanel::goalCntCB, this, std::placeholders::_1));
 
-        status_sub_ = nh_->create_subscription<actionlib_msgs::msg::GoalStatusArray>("/waypoint_model/status", 1,
+        status_sub_ = nh_->create_subscription<action_msgs::msg::GoalStatusArray>("/tracking_action/_action/status", 1,
                                                                      std::bind(&MultiNaviGoalsPanel::statusCB, this,
                                                                                  std::placeholders::_1));
     }
@@ -263,41 +265,44 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
     // cancel the current command
     void MultiNaviGoalsPanel::cancelNavi() {
-        if (!cur_goalid_.id.empty()) {
-            cancel_pub_->publish(cur_goalid_);
+        if (!cur_goalid_.goal_id.uuid.empty()) {
+
+            auto cancel_request = std::make_shared<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService::Request>();
+            cancel_request->goal_info = cur_goalid_;
+            cancel_client_->async_send_request(cancel_request);
+
             RCLCPP_ERROR(nh_->get_logger(), "Navigation have been canceled");
         }
     }
 
     // call back for listening current state
-    void MultiNaviGoalsPanel::statusCB(const actionlib_msgs::msg::GoalStatusArray::SharedPtr statuses) {
-        bool arrived_pre = arrived_;
+    void MultiNaviGoalsPanel::statusCB(const action_msgs::msg::GoalStatusArray::SharedPtr statuses) {
         arrived_ = checkGoal(statuses->status_list);
-        if (arrived_) { RCLCPP_ERROR(nh_->get_logger(), "%d, %d", int(arrived_), int(arrived_pre)); }
-        if (arrived_ && arrived_ != arrived_pre && rclcpp::ok() && permit_) {
+        if (arrived_ && rclcpp::ok() && permit_) {
             if (cycle_) cycleNavi();
             else completeNavi();
         }
     }
 
     //check the current state of goal
-    bool MultiNaviGoalsPanel::checkGoal(std::vector<actionlib_msgs::msg::GoalStatus> status_list) {
+    bool MultiNaviGoalsPanel::checkGoal(std::vector<action_msgs::msg::GoalStatus> status_list) {
         bool done;
         if (!status_list.empty()) {
-            for (auto &i : status_list) {
-                if (i.status == 3) {
+            auto statu_i = status_list.back();
+            // for (auto &i : status_list) {
+                if (statu_i.status == action_msgs::msg::GoalStatus::STATUS_SUCCEEDED) {
                     done = true;
                     RCLCPP_INFO(nh_->get_logger(), "completed Goal %d", curGoalIdx_);
-                } else if (i.status == 4) {
+                } else if (statu_i.status == action_msgs::msg::GoalStatus::STATUS_ABORTED) {
                     RCLCPP_ERROR(nh_->get_logger(), "Goal %d is Invalid, Navi to Next Goal %d",curGoalIdx_, curGoalIdx_ + 1);
                     return true;
-                } else if (i.status == 0) {
+                } else if (statu_i.status == action_msgs::msg::GoalStatus::STATUS_UNKNOWN) {
                     done = true;
-                } else if (i.status == 1) {
-                    cur_goalid_ = i.goal_id;
+                } else if (statu_i.status == action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+                    cur_goalid_ = statu_i.goal_info;
                     done = false;
                 } else done = false;
-            }
+            // }
         } else {
             RCLCPP_INFO(nh_->get_logger(), "Please input the Navi Goal");
             done = false;

@@ -17,10 +17,11 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
-#include <actionlib_msgs/msg/goal_status.hpp>
+#include <action_msgs/msg/goal_status_array.hpp>
 #include <actionlib_msgs/msg/goal_status_array.hpp>
 #include <tf2/transform_datatypes.h>
 
+#include "pp_msgs/action/trajectory_control.hpp"
 
 namespace navi_multi_goals_pub_rviz_plugin {
 
@@ -53,14 +54,14 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
         void goalCntCB(const geometry_msgs::msg::PoseStamped::SharedPtr pose);  //goal count sub callback function
 
-        void statusCB(const actionlib_msgs::msg::GoalStatusArray::SharedPtr statuses); //status sub callback function
+        void statusCB(const action_msgs::msg::GoalStatusArray::SharedPtr statuses); //status sub callback function
 
         void checkCycle();
 
         void completeNavi();               //after the first pose, continue to navigate the rest of poses
         void cycleNavi();
 
-        bool checkGoal(std::vector<actionlib_msgs::msg::GoalStatus> status_list);  // check whether arrived the goal
+        bool checkGoal(std::vector<action_msgs::msg::GoalStatus> status_list);  // check whether arrived the goal
 
         void startSpin(); // spin for sub
     protected:
@@ -75,18 +76,19 @@ namespace navi_multi_goals_pub_rviz_plugin {
         rclcpp::Node::SharedPtr nh_;
         // publisher
         rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
-        rclcpp::Publisher<actionlib_msgs::msg::GoalID>::SharedPtr cancel_pub_;
         rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
         // subscriber
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
-        rclcpp::Subscription<actionlib_msgs::msg::GoalStatusArray>::SharedPtr status_sub_;
+        rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr status_sub_;
 
+        // client
+        rclcpp::Client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>::SharedPtr cancel_client_;
         int maxNumGoal_;
         int curGoalIdx_ = 0, cycleCnt_ = 0;
         bool permit_ = false, cycle_ = false, arrived_ = false;
         geometry_msgs::msg::PoseArray pose_array_;
 
-        actionlib_msgs::msg::GoalID cur_goalid_;
+        action_msgs::msg::GoalInfo cur_goalid_;
 
 
     };

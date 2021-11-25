@@ -18,6 +18,7 @@ find_package(rclcpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(pp_msgs REQUIRED)
 find_package(actionlib_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
@@ -45,7 +46,7 @@ include_directories(
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 ament_target_dependencies(${PROJECT_NAME}
   rclcpp tf2 rviz_common actionlib_msgs
-  std_msgs  visualization_msgs
+  std_msgs pp_msgs visualization_msgs
   pluginlib Qt5
 )
 ## Link the library with whatever Qt libraries have been defined by
