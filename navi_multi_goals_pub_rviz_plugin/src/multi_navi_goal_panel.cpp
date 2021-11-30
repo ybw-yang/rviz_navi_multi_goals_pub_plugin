@@ -25,7 +25,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
     {
         // nh_ = getDisplayContext()->getRosNodeAbstraction().lock()->get_raw_node();
         nh_ = std::make_shared<rclcpp::Node>("navi_multi_goals");
-        goal_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseStamped>("/goal_pose", 1);
+        waypoints_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseArray>("/wapoints_pose", 1);
         marker_pub_ = nh_->create_publisher<visualization_msgs::msg::Marker>("/waypoint_model/visualization_marker", 1);
 
         cancel_client_ = nh_->create_client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>("/tracking_action/_action/cancel_goal");
@@ -210,56 +210,23 @@ namespace navi_multi_goals_pub_rviz_plugin {
     void MultiNaviGoalsPanel::startNavi() {
         curGoalIdx_ = curGoalIdx_ % pose_array_.poses.size();
         if (!pose_array_.poses.empty() && curGoalIdx_ < maxNumGoal_) {
-            geometry_msgs::msg::PoseStamped goal;
-            goal.header = pose_array_.header;
-            goal.pose = pose_array_.poses.at(curGoalIdx_);
-            goal_pub_->publish(goal);
-            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
+            waypoints_pub_->publish(pose_array_);
             poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
             poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
-            curGoalIdx_ += 1;
+
+            // geometry_msgs::msg::PoseStamped goal;
+            // goal.header = pose_array_.header;
+            // goal.pose = pose_array_.poses.at(curGoalIdx_);
+            // waypoints_pub_->publish(goal);
+            // RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
+            // poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
+            // poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
+            // poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
+            // curGoalIdx_ += 1;
             permit_ = true;
         } else {
             RCLCPP_ERROR(nh_->get_logger(), "Something Wrong");
-        }
-    }
-
-    // complete the remaining goals
-    void MultiNaviGoalsPanel::completeNavi() {
-        if (curGoalIdx_ < int(pose_array_.poses.size())) {
-            geometry_msgs::msg::PoseStamped goal;
-            goal.header = pose_array_.header;
-            goal.pose = pose_array_.poses.at(curGoalIdx_);
-            goal_pub_->publish(goal);
-            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
-            poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
-            poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
-            poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
-            curGoalIdx_ += 1;
-            permit_ = true;
-        } else {
-            RCLCPP_ERROR(nh_->get_logger(), "All goals are completed");
-            permit_ = false;
-        }
-    }
-
-    // command the goals cyclically
-    void MultiNaviGoalsPanel::cycleNavi() {
-        if (permit_) {
-            geometry_msgs::msg::PoseStamped goal;
-            goal.header = pose_array_.header;
-            goal.pose = pose_array_.poses.at(curGoalIdx_ % pose_array_.poses.size());
-            goal_pub_->publish(goal);
-            RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d, in the %dth cycle", curGoalIdx_ % pose_array_.poses.size() + 1, cycleCnt_ + 1);
-            bool even = ((cycleCnt_ + 1) % 2 != 0);
-            QColor color_table;
-            if (even) color_table = QColor(255, 69, 0); else color_table = QColor(100, 149, 237);
-            poseArray_table_->item(curGoalIdx_ % pose_array_.poses.size(), 0)->setBackgroundColor(color_table);
-            poseArray_table_->item(curGoalIdx_ % pose_array_.poses.size(), 1)->setBackgroundColor(color_table);
-            poseArray_table_->item(curGoalIdx_ % pose_array_.poses.size(), 2)->setBackgroundColor(color_table);
-            curGoalIdx_ += 1;
-            cycleCnt_ = curGoalIdx_ / pose_array_.poses.size();
         }
     }
 
@@ -278,10 +245,10 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // call back for listening current state
     void MultiNaviGoalsPanel::statusCB(const action_msgs::msg::GoalStatusArray::SharedPtr statuses) {
         arrived_ = checkGoal(statuses->status_list);
-        if (arrived_ && rclcpp::ok() && permit_) {
-            if (cycle_) cycleNavi();
-            else completeNavi();
-        }
+        // if (arrived_ && rclcpp::ok() && permit_) {
+        //     if (cycle_) cycleNavi();
+        //     else completeNavi();
+        // }
     }
 
     //check the current state of goal

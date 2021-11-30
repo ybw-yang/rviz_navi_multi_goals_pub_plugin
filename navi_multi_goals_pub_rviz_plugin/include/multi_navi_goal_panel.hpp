@@ -58,9 +58,6 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
         void checkCycle();
 
-        void completeNavi();               //after the first pose, continue to navigate the rest of poses
-        void cycleNavi();
-
         bool checkGoal(std::vector<action_msgs::msg::GoalStatus> status_list);  // check whether arrived the goal
 
         void startSpin(); // spin for sub
@@ -75,7 +72,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
         // The ROS node handle.
         rclcpp::Node::SharedPtr nh_;
         // publisher
-        rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr goal_pub_;
+        rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr waypoints_pub_;
         rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
         // subscriber
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
