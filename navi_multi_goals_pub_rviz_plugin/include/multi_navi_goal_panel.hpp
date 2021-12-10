@@ -17,11 +17,12 @@
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_msgs/msg/empty.hpp>
 #include <action_msgs/msg/goal_status_array.hpp>
 #include <actionlib_msgs/msg/goal_status_array.hpp>
 #include <tf2/transform_datatypes.h>
 
-#include "pp_msgs/action/trajectory_control.hpp"
+// #include "pp_msgs/action/trajectory_control.hpp"
 
 namespace navi_multi_goals_pub_rviz_plugin {
 
@@ -51,10 +52,11 @@ namespace navi_multi_goals_pub_rviz_plugin {
         void updatePoseTable();             // update the pose table
         void startNavi();                   // start navigate for the first pose
         void cancelNavi();
+        void cycleNavi();
 
         void goalCntCB(const geometry_msgs::msg::PoseStamped::SharedPtr pose);  //goal count sub callback function
-
         void statusCB(const action_msgs::msg::GoalStatusArray::SharedPtr statuses); //status sub callback function
+        void missionCompleteCB(const std_msgs::msg::Empty::SharedPtr success); //mission complete sub callback function
 
         void checkCycle();
 
@@ -74,12 +76,14 @@ namespace navi_multi_goals_pub_rviz_plugin {
         // publisher
         rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr waypoints_pub_;
         rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr marker_pub_;
+        rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr cancel_pub_;
         // subscriber
         rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
         rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr status_sub_;
+        rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr mission_complete_sub_;
 
         // client
-        rclcpp::Client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>::SharedPtr cancel_client_;
+        // rclcpp::Client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>::SharedPtr cancel_client_;
         int maxNumGoal_;
         int curGoalIdx_ = 0, cycleCnt_ = 0;
         bool permit_ = false, cycle_ = false, arrived_ = false;

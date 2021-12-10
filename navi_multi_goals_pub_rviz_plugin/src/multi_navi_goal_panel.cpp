@@ -27,9 +27,8 @@ namespace navi_multi_goals_pub_rviz_plugin {
         nh_ = std::make_shared<rclcpp::Node>("navi_multi_goals");
         waypoints_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseArray>("/wapoints_pose", 1);
         marker_pub_ = nh_->create_publisher<visualization_msgs::msg::Marker>("/waypoint_model/visualization_marker", 1);
-
-        cancel_client_ = nh_->create_client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>("/tracking_action/_action/cancel_goal");
-
+        cancel_pub_ = nh_->create_publisher<std_msgs::msg::Empty>("/mission_cancel", 1);
+        // cancel_client_ = nh_->create_client<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService>("/tracking_action/_action/cancel_goal");
 
         QVBoxLayout *root_layout = new QVBoxLayout;
         // create a panel about "maxNumGoal"
@@ -79,6 +78,9 @@ namespace navi_multi_goals_pub_rviz_plugin {
         status_sub_ = nh_->create_subscription<action_msgs::msg::GoalStatusArray>("/tracking_action/_action/status", 1,
                                                                      std::bind(&MultiNaviGoalsPanel::statusCB, this,
                                                                                  std::placeholders::_1));
+        mission_complete_sub_ = nh_->create_subscription<std_msgs::msg::Empty>("/mission_complete", 1,
+                                                                     std::bind(&MultiNaviGoalsPanel::missionCompleteCB, this,
+                                                                                 std::placeholders::_1));                                                                
     }
 
     void MultiNaviGoalsPanel::onInitialize()
@@ -208,22 +210,13 @@ namespace navi_multi_goals_pub_rviz_plugin {
 
     // start to navigate, and only command the first goal
     void MultiNaviGoalsPanel::startNavi() {
-        curGoalIdx_ = curGoalIdx_ % pose_array_.poses.size();
-        if (!pose_array_.poses.empty() && curGoalIdx_ < maxNumGoal_) {
+        if (!pose_array_.poses.empty()) {
             waypoints_pub_->publish(pose_array_);
-            poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
-            poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
-            poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
-
-            // geometry_msgs::msg::PoseStamped goal;
-            // goal.header = pose_array_.header;
-            // goal.pose = pose_array_.poses.at(curGoalIdx_);
-            // waypoints_pub_->publish(goal);
-            // RCLCPP_INFO(nh_->get_logger(), "Navi to the Goal %d", curGoalIdx_ + 1);
-            // poseArray_table_->item(curGoalIdx_, 0)->setBackgroundColor(QColor(255, 69, 0));
-            // poseArray_table_->item(curGoalIdx_, 1)->setBackgroundColor(QColor(255, 69, 0));
-            // poseArray_table_->item(curGoalIdx_, 2)->setBackgroundColor(QColor(255, 69, 0));
-            // curGoalIdx_ += 1;
+            for(int curGoalIdx=0;curGoalIdx < maxNumGoal_;curGoalIdx++){
+                poseArray_table_->item(curGoalIdx, 0)->setBackgroundColor(QColor(255, 69, 0));
+                poseArray_table_->item(curGoalIdx, 1)->setBackgroundColor(QColor(255, 69, 0));
+                poseArray_table_->item(curGoalIdx, 2)->setBackgroundColor(QColor(255, 69, 0));
+            }
             permit_ = true;
         } else {
             RCLCPP_ERROR(nh_->get_logger(), "Something Wrong");
@@ -233,15 +226,33 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // cancel the current command
     void MultiNaviGoalsPanel::cancelNavi() {
         if (!cur_goalid_.goal_id.uuid.empty()) {
-
-            auto cancel_request = std::make_shared<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService::Request>();
-            cancel_request->goal_info = cur_goalid_;
-            cancel_client_->async_send_request(cancel_request);
+            cancel_pub_->publish(std_msgs::msg::Empty());
+            // auto cancel_request = std::make_shared<pp_msgs::action::TrajectoryControl::Impl::CancelGoalService::Request>();
+            // cancel_request->goal_info = cur_goalid_;
+            // cancel_client_->async_send_request(cancel_request);
 
             RCLCPP_ERROR(nh_->get_logger(), "Navigation have been canceled");
         }
     }
-
+    // command the goals cyclically
+    void MultiNaviGoalsPanel::cycleNavi() {
+        if (permit_) {
+            waypoints_pub_->publish(pose_array_);
+            static bool even = 0;
+            QColor color_table;
+            if (even){
+                color_table = QColor(255, 69, 0); 
+            } else{
+                color_table = QColor(100, 149, 237);
+            }
+            even = !even;
+            for(int curGoalIdx=0;curGoalIdx < maxNumGoal_;curGoalIdx++){
+                poseArray_table_->item(curGoalIdx, 0)->setBackgroundColor(color_table);
+                poseArray_table_->item(curGoalIdx, 1)->setBackgroundColor(color_table);
+                poseArray_table_->item(curGoalIdx, 2)->setBackgroundColor(color_table);
+            }
+        }
+    }
     // call back for listening current state
     void MultiNaviGoalsPanel::statusCB(const action_msgs::msg::GoalStatusArray::SharedPtr statuses) {
         arrived_ = checkGoal(statuses->status_list);
@@ -249,6 +260,10 @@ namespace navi_multi_goals_pub_rviz_plugin {
         //     if (cycle_) cycleNavi();
         //     else completeNavi();
         // }
+    }
+
+    void MultiNaviGoalsPanel::missionCompleteCB(const std_msgs::msg::Empty::SharedPtr ) {
+        if (cycle_) cycleNavi();
     }
 
     //check the current state of goal
