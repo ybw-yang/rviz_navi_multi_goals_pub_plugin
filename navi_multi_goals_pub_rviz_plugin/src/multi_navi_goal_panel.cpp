@@ -211,6 +211,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // start to navigate, and only command the first goal
     void MultiNaviGoalsPanel::startNavi() {
         if (!pose_array_.poses.empty()) {
+            pose_array_.header.stamp = nh_->now();
             waypoints_pub_->publish(pose_array_);
             for(int curGoalIdx=0;curGoalIdx < maxNumGoal_;curGoalIdx++){
                 poseArray_table_->item(curGoalIdx, 0)->setBackgroundColor(QColor(255, 69, 0));
@@ -237,6 +238,7 @@ namespace navi_multi_goals_pub_rviz_plugin {
     // command the goals cyclically
     void MultiNaviGoalsPanel::cycleNavi() {
         if (permit_) {
+            pose_array_.header.stamp = nh_->now();
             waypoints_pub_->publish(pose_array_);
             static bool even = 0;
             QColor color_table;
