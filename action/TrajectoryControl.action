@@ -1,0 +1,12 @@
+#goal definition
+geometry_msgs/PoseStamped goal_pose
+geometry_msgs/Pose[] robot_trajectory
+float64[] curvatures
+---
+#result definition
+builtin_interfaces/Duration time_cost
+---
+#feedback
+float64 trajectory_deviation_error
+float64 distance_to_goal
+geometry_msgs/Twist control_speed

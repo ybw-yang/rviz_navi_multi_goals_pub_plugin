@@ -1,0 +1,9 @@
+#goal definition
+geometry_msgs/PoseStamped goal_pose
+---
+#result definition
+builtin_interfaces/Duration time_cost
+---
+#feedback
+float64 remain_distance
+geometry_msgs/Twist control_speed
