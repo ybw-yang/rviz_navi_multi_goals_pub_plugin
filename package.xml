@@ -35,11 +35,9 @@
   <build_depend>qtbase5-dev</build_depend>
   <depend>rclcpp</depend>
   <depend>geometry_msgs</depend>
-  <depend>actionlib_msgs</depend>
   <depend>rviz_common</depend>
   <depend>std_msgs</depend>
   <depend>pluginlib</depend>
-  <depend>pp_msgs</depend>
 
   <exec_depend>libqt5-core</exec_depend>
   <exec_depend>libqt5-gui</exec_depend>

@@ -4,4 +4,9 @@
            base_class_type="rviz_common::Panel">
         <description>A panel widget allowing multi-goals navigation.</description>
     </class>
+    <class name="navi_multi_goals_pub_rviz_plugin/PointCloudGoalTool"
+           type="navi_multi_goals_pub_rviz_plugin::PointCloudGoalTool"
+           base_class_type="rviz_common::Tool">
+        <description>Pick a goal pose directly off point-cloud geometry. Click to anchor a 3-D position from the depth buffer, drag to set heading, release to publish on /goal_pose.</description>
+    </class>
 </library>

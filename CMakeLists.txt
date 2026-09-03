@@ -18,12 +18,13 @@ find_package(rclcpp REQUIRED)
 find_package(rviz_common REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(actionlib_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
+find_package(rviz_default_plugins REQUIRED)
+find_package(rviz_rendering REQUIRED)
 find_package(Qt5 REQUIRED COMPONENTS Core Gui Widgets Test Concurrent)
-find_package(pp_msgs REQUIRED)
 
 ## This setting causes Qt's "MOC" generation to happen automatically.
 
@@ -32,6 +33,8 @@ find_package(pp_msgs REQUIRED)
 set(SOURCE_FILES
   src/multi_navi_goal_panel.cpp
   include/multi_navi_goal_panel.hpp
+  src/point_cloud_goal_tool.cpp
+  include/point_cloud_goal_tool.hpp
   ${MOC_FILES}
 )
 
@@ -45,8 +48,8 @@ include_directories(
 # in ``${SOURCE_FILES}``.
 add_library(${PROJECT_NAME} SHARED ${SOURCE_FILES})
 ament_target_dependencies(${PROJECT_NAME}
-  rclcpp tf2 rviz_common actionlib_msgs
-  std_msgs visualization_msgs pp_msgs
+  rclcpp tf2 tf2_geometry_msgs rviz_common rviz_rendering rviz_default_plugins
+  std_msgs visualization_msgs geometry_msgs
   pluginlib Qt5
 )
 ## Link the library with whatever Qt libraries have been defined by
