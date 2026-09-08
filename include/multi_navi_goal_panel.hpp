@@ -51,6 +51,8 @@ protected Q_SLOTS:
 
 private:
     void addGoal(const geometry_msgs::msg::PoseStamped &ps);
+    // Frame the markers are published in; must never be empty (see deleteMark).
+    std::string markerFrame() const;
 
 protected:
     QPushButton *output_reset_button_;

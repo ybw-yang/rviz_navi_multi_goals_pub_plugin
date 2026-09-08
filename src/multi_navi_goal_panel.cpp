@@ -25,8 +25,11 @@ MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
 {
     nh_ = std::make_shared<rclcpp::Node>("navi_multi_goals");
     waypoints_pub_ = nh_->create_publisher<geometry_msgs::msg::PoseArray>("/wapoints_pose", 1);
+    // Depth must cover a burst: every goal publishes 2 markers (arrow + number),
+    // and a reset publishes a DELETEALL. A depth-1 reliable queue can drop
+    // samples of such a burst before the display ever sees them.
     marker_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>(
-        "/waypoint_model/visualization_marker", 1);
+        "/waypoint_model/visualization_marker", rclcpp::QoS(100));
 
     QVBoxLayout *root_layout = new QVBoxLayout;
 
@@ -93,8 +96,24 @@ void MultiNaviGoalsPanel::initPoseTable() {
 
 // ── Marker ────────────────────────────────────────────────────────
 
+std::string MultiNaviGoalsPanel::markerFrame() const {
+    if (const auto *ctx = getDisplayContext()) {
+        std::string fixed = ctx->getFixedFrame().toStdString();
+        if (!fixed.empty()) return fixed;
+    }
+    // Constructor runs before initialize(), so there is no context yet.
+    if (!pose_array_.header.frame_id.empty()) return pose_array_.header.frame_id;
+    return "map";
+}
+
 void MultiNaviGoalsPanel::deleteMark() {
     visualization_msgs::msg::Marker m;
+    // RViz's Marker display is a MessageFilterDisplay: every marker, DELETEALL
+    // included, passes through a tf2 MessageFilter that silently drops messages
+    // with an empty frame_id. Without a frame the clear never arrives and the
+    // previous round's markers stay on screen.
+    m.header.frame_id = markerFrame();
+    m.header.stamp    = nh_->get_clock()->now();
     m.action = visualization_msgs::msg::Marker::DELETEALL;
     marker_pub_->publish(m);
 }
