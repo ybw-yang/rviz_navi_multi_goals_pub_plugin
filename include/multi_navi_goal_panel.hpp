@@ -41,6 +41,7 @@ public Q_SLOTS:
 protected Q_SLOTS:
     void initPoseTable();
     void startNavi();
+    void cancelNavi();
     void checkCycle();
     void startSpin();
 
@@ -55,15 +56,19 @@ private:
     std::string markerFrame() const;
 
 protected:
-    QPushButton *output_reset_button_;
-    QPushButton *output_startNavi_button_;
-    QTableWidget *poseArray_table_;
-    QCheckBox    *cycle_checkbox_;
+    // initPoseTable() runs from the constructor, before these are constructed, and
+    // checks them for null — so they must start null rather than indeterminate.
+    QPushButton *output_reset_button_ = nullptr;
+    QPushButton *output_cancelNavi_button_ = nullptr;
+    QPushButton *output_startNavi_button_ = nullptr;
+    QTableWidget *poseArray_table_ = nullptr;
+    QCheckBox    *cycle_checkbox_ = nullptr;
 
     rclcpp::Node::SharedPtr nh_;
 
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr    waypoints_pub_;
     rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr  marker_pub_;
+    rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr             cancel_pub_;
 
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  goal_sub_;
     rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr  goal_pose_sub_;
@@ -72,6 +77,9 @@ protected:
 
     int  curGoalIdx_ = 0, cycleCnt_ = 0;
     bool permit_ = false, cycle_ = false, arrived_ = false;
+    // rviz_common::Panel does not initialise its context_ member in the constructor;
+    // it is only set by initialize(), which runs after ours. Gate every access on this.
+    bool context_ready_ = false;
 
     geometry_msgs::msg::PoseArray pose_array_;
 

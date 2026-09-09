@@ -30,6 +30,7 @@ MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
     // samples of such a burst before the display ever sees them.
     marker_pub_    = nh_->create_publisher<visualization_msgs::msg::Marker>(
         "/waypoint_model/visualization_marker", rclcpp::QoS(100));
+    cancel_pub_    = nh_->create_publisher<std_msgs::msg::Empty>("/mission_cancel", 1);
 
     QVBoxLayout *root_layout = new QVBoxLayout;
 
@@ -43,9 +44,13 @@ MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
 
     // ── Control row ───────────────────────────────────────────────
     QHBoxLayout *ctrl_layout = new QHBoxLayout;
-    output_reset_button_    = new QPushButton("重置");
+    output_reset_button_     = new QPushButton("重置");
+    output_cancelNavi_button_ = new QPushButton("结束导航");
     output_startNavi_button_ = new QPushButton("开始导航!");
+    // Cancel only makes sense once a mission is running.
+    output_cancelNavi_button_->setEnabled(false);
     ctrl_layout->addWidget(output_reset_button_);
+    ctrl_layout->addWidget(output_cancelNavi_button_);
     ctrl_layout->addWidget(output_startNavi_button_);
     root_layout->addLayout(ctrl_layout);
 
@@ -53,6 +58,7 @@ MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
 
     // ── Signals ───────────────────────────────────────────────────
     connect(output_reset_button_, SIGNAL(clicked()),       this, SLOT(initPoseTable()));
+    connect(output_cancelNavi_button_, SIGNAL(clicked()),  this, SLOT(cancelNavi()));
     connect(output_startNavi_button_, SIGNAL(clicked()),   this, SLOT(startNavi()));
     connect(cycle_checkbox_,      SIGNAL(clicked(bool)),   this, SLOT(checkCycle()));
 
@@ -75,12 +81,18 @@ MultiNaviGoalsPanel::MultiNaviGoalsPanel(QWidget *parent)
         std::bind(&MultiNaviGoalsPanel::statusCB, this, std::placeholders::_1));
 }
 
-void MultiNaviGoalsPanel::onInitialize() {}
+void MultiNaviGoalsPanel::onInitialize() {
+    // initialize() has stored the DisplayContext by the time this runs.
+    context_ready_ = true;
+}
 
 // ── Table ─────────────────────────────────────────────────────────
 
 void MultiNaviGoalsPanel::initPoseTable() {
     RCLCPP_INFO(nh_->get_logger(), "Initialize");
+    // Reset drops the goals the robot is driving to, so it must also stop the
+    // mission — otherwise the robot keeps following a route the panel forgot.
+    if (permit_) cancelNavi();
     curGoalIdx_ = 0; cycleCnt_ = 0;
     permit_ = false; cycle_ = false;
     poseArray_table_->clear();
@@ -97,11 +109,15 @@ void MultiNaviGoalsPanel::initPoseTable() {
 // ── Marker ────────────────────────────────────────────────────────
 
 std::string MultiNaviGoalsPanel::markerFrame() const {
-    if (const auto *ctx = getDisplayContext()) {
-        std::string fixed = ctx->getFixedFrame().toStdString();
-        if (!fixed.empty()) return fixed;
+    // The constructor calls initPoseTable() -> deleteMark() -> here, long before RViz
+    // calls initialize(). Panel::context_ is raw and uninitialised until then, so
+    // getDisplayContext() would hand back garbage and the virtual call would segfault.
+    if (context_ready_) {
+        if (const auto *ctx = getDisplayContext()) {
+            std::string fixed = ctx->getFixedFrame().toStdString();
+            if (!fixed.empty()) return fixed;
+        }
     }
-    // Constructor runs before initialize(), so there is no context yet.
     if (!pose_array_.header.frame_id.empty()) return pose_array_.header.frame_id;
     return "map";
 }
@@ -191,6 +207,25 @@ void MultiNaviGoalsPanel::startNavi() {
         if (poseArray_table_->item(curGoalIdx_, col))
             poseArray_table_->item(curGoalIdx_, col)->setBackground(QColor(255, 69, 0));
     permit_ = true;
+    if (output_cancelNavi_button_) output_cancelNavi_button_->setEnabled(true);
+}
+
+void MultiNaviGoalsPanel::cancelNavi() {
+    if (!rclcpp::ok()) return;
+    // pp_TrajectoryCore consumes this as a one-shot flag off the blackboard and
+    // halts its running children; the goal list itself is left intact so the
+    // same route can be restarted with "开始导航!".
+    cancel_pub_->publish(std_msgs::msg::Empty());
+    RCLCPP_WARN(nh_->get_logger(), "mission cancel requested");
+    permit_ = false;
+    cycle_  = false;
+    if (cycle_checkbox_) cycle_checkbox_->setCheckState(Qt::Unchecked);
+    // Drop the "current goal" highlight — nothing is being driven to any more.
+    for (int row = 0; row < poseArray_table_->rowCount(); ++row)
+        for (int col = 0; col < 3; ++col)
+            if (poseArray_table_->item(row, col))
+                poseArray_table_->item(row, col)->setBackground(QBrush());
+    if (output_cancelNavi_button_) output_cancelNavi_button_->setEnabled(false);
 }
 
 void MultiNaviGoalsPanel::checkCycle() {
