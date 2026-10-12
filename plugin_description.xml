@@ -9,4 +9,16 @@
            base_class_type="rviz_common::Tool">
         <description>Pick a goal pose directly off point-cloud geometry. Click to anchor a 3-D position from the depth buffer, drag to set heading, release to publish on /goal_pose.</description>
     </class>
+  <class name="navi_multi_goals_pub_rviz_plugin/VirtualWallTool" type="navi_multi_goals_pub_rviz_plugin::WallTool" base_class_type="rviz_common::Tool">
+    <description>Pick 3D wall endpoints on the traversability cloud.</description>
+  </class>
+  <class name="navi_multi_goals_pub_rviz_plugin/VirtualWallPanel" type="navi_multi_goals_pub_rviz_plugin::WallPanel" base_class_type="rviz_common::Panel">
+    <description>Edit wall coordinates, height and thickness; undo, delete, save and load.</description>
+  </class>
+  <class name="navi_multi_goals_pub_rviz_plugin/HeightCloud" type="navi_multi_goals_pub_rviz_plugin::HeightCloudDisplay" base_class_type="rviz_common::Display">
+    <description>PointCloud2 display with an interactive source-frame height interval.</description>
+  </class>
+  <class name="navi_multi_goals_pub_rviz_plugin/HeightRangePanel" type="navi_multi_goals_pub_rviz_plugin::HeightRangePanel" base_class_type="rviz_common::Panel">
+    <description>Drag the minimum and maximum heights of a HeightCloud display.</description>
+  </class>
 </library>
